@@ -1,16 +1,17 @@
 package com.Howard;
 
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
+
+import com.Howard.Logging.LogConfiguration;
 
 public class CGoL {
 	/*Args: a single integer value N specifying the side length for the square game area 
-	 * followed optionally by N integer values whose binary representation is used to  
-	 * 
+	 * followed optionally by N integer values whose binary representation is used to specify the live cells in each row from top to bottom. 
 	 */
 	public static void main(String[] Args) throws Exception 
 	{
+		LogConfiguration.Configure();
 		Game game;
 		if(Args.length>0) {
 			System.out.println(Arrays.asList(Args).toString());
