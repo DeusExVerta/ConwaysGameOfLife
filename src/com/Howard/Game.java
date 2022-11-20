@@ -59,20 +59,34 @@ public class Game {
 					StringBuilder sb = new StringBuilder(
 						Integer.toBinaryString(x)
 						);
-						sb.reverse();
-						while(sb.length()<32) 
-						{
-							sb.append('0');
+						if(sb.length()<size) {
+							sb.reverse();
+							while(sb.length()<size) 
+							{
+								sb.append('0');
+							}
+							sb.reverse();
+							return sb.toString();
 						}
-						sb.reverse();
-						return sb.toString().substring(32-size,32);
+						return sb.substring(sb.length()-size, sb.length());
 					}
 				).iterator();
 		
 		current=new ArrayList<List<Boolean>>(size);
 		for(int i=0;i<size;i++) 
 		{
-			String s = iter.hasNext()?iter.next():"00000000000000000000000000000000";
+			String s; 
+			if(iter.hasNext()) 
+			{ 
+				s = iter.next();
+			}else{
+				StringBuilder sb = new StringBuilder();
+				while(sb.length()<size) 
+				{
+					sb.append(0);
+				}
+				s = sb.toString();
+			}
 			ArrayList<Boolean> row=new ArrayList<Boolean>(size);
 			for(int j=0;j<size;j++){
 				row.add(s.charAt(j)=='1');
@@ -125,16 +139,21 @@ public class Game {
 		return current;
 	}
 	
+	//TODO: Parallelize 
 	public void nextGeneration() 
 	{
+		log.info("Starting Calculation of Next Generation");
 		//compute next generation from current
 		this.next = IntStream.range(0, size)
+				.parallel()
 				.mapToObj(
 					(i)->IntStream.range(0, size)
+					.parallel()
 					.mapToObj(
 							(j)->getNextCellState(i,j)
 							).toList()
 					).toList();
+		log.info("Finished Calculating Next Generation");
 		//increment generation
 		generation++;
 		//swap references of current and next after completing computation of next
@@ -145,8 +164,11 @@ public class Game {
 	
 	private Boolean getNextCellState(Integer i, Integer j)
 	{
-		Integer result = IntStream.range(-1, 2).map(
-				(k)->IntStream.range(-1, 2).mapToObj(
+		Integer result = IntStream.range(-1, 2)
+				.parallel()
+				.map(
+				(k)->IntStream.range(-1, 2)
+					.mapToObj(
 						(q)->{
 							Boolean b = current
 								.get(
@@ -160,14 +182,14 @@ public class Game {
 							}
 				).reduce(0,(acc,cur)->(acc+(cur?1:0)),Integer::sum)
 				).reduce(0,(acc2,cur2)->(acc2+cur2));
-		log.info("Cell:["+i+","+j+"]");
+		log.debug("Cell:["+i+","+j+"]");
 		return Game.liveSum(result, current.get(i).get(j));
 	}
 	
 	private static Boolean liveSum(Integer sum, Boolean state) 
 	{
 		Boolean result = sum==3||(state&&sum==2);
-		log.info(String.format("[Sum:%d, State:%b, Next State:%b]",sum,state,result));
+		log.debug(String.format("[Sum:%d, State:%b, Next State:%b]",sum,state,result));
 		return result;
 	}
 	
@@ -177,35 +199,84 @@ public class Game {
 		return hasLiveCells() && !currentIsNext();
 	}
 	
-	//TODO: examine if traditional loops are faster due to the ability to short circuit 
 	private Boolean hasLiveCells() 
 	{
-		return current.parallelStream().map(
-				(list)->list.stream()
-				.reduce(
-						false,
-						(rowResult,cell)->(cell||rowResult)
-						)
-				)
-			.reduce(
-					false,
-					(isLive,rowTotal)->(isLive||rowTotal)
-					);
+		log.info("Testing for Live Cells");
+		for(List<Boolean> list:current) 
+		{
+			for(Boolean b:list) 
+			{
+				if(b)
+				{
+					log.info(String.format("%s Result: %b",Thread.currentThread().getStackTrace()[1].getMethodName(), true));
+					return true;
+				}
+				log.debug("Dead Cell. Continuing");
+			}
+			log.debug("Row Complete. Continuing");
+		}
+		log.info(String.format("%s Result: %b",Thread.currentThread().getStackTrace()[1].getMethodName(), false));
+		return false;
+//		Boolean result = current.parallelStream().map(
+//				(list)->list.parallelStream()
+//				.reduce(
+//						false,
+//						(rowResult,cell)->{
+//							log.debug(String.format("Cell Value: %b, HasTrue: %b",cell, rowResult));
+//							return cell||rowResult;
+//							}
+//						)
+//				)
+//			.reduce(
+//					false,
+//					(isLive,rowTotal)->{
+//						log.debug(String.format("Row Value: %b, HasTrue: %b",rowTotal,isLive));
+//						return isLive||rowTotal;
+//						}
+//					);
+//		log.debug(String.format("%s Result: %b",Thread.currentThread().getStackTrace()[1].getMethodName(), result));
+//		return result;
 	}
 	
-	//TODO: examine if traditional loops are faster due to the ability to short circuit 
+	//return true iff all rows are true
 	private Boolean currentIsNext() 
 	{
-		return IntStream.range(0, size).mapToObj((i)->current.get(i).equals(next.get(i)))
-				.reduce(false,
-						(overall,rowResult)->(overall||rowResult)
-						);
+		log.info("Testing if current state equals next state");
+		for(int i=0;i<size;i++) 
+		{
+			for(int j=0;j<size;j++) 
+			{
+				if(current.get(i).get(j)!=next.get(i).get(j)) 
+				{
+					log.info(String.format("%s Result: %b",Thread.currentThread().getStackTrace()[1].getMethodName(), false));
+					return false;
+				}
+			}
+		}
+		log.info(String.format("%s Result: %b",Thread.currentThread().getStackTrace()[1].getMethodName(), true));
+		return true;
+//		Boolean result = IntStream.range(0, size)
+//				.mapToObj(
+//						(i)->{
+//						Boolean cur = current.get(i).equals(next.get(i));
+//						log.debug(String.format("Current %s, Next %s Equals: %b",current.get(i),next.get(i), cur));
+//						return cur;
+//						}
+//						)
+//				.reduce(true,
+//						(equals,rowResult)->{
+//							log.debug(String.format("Equals %b, RowResult %b", equals, rowResult));
+//							return equals&&rowResult;}
+//						);
+//		log.debug(String.format("%s Result: %b",Thread.currentThread().getStackTrace()[1].getMethodName(), result));
+//		return result;
 	}
 	
 	@Override
 	public String toString() 
 	{
-		StringBuilder sb = new StringBuilder("Generation ");
+		StringBuilder sb = new StringBuilder();
+		sb.append("Generation ");
 		sb.append(generation);
 		current.forEach(
 				(li)->{
@@ -217,8 +288,6 @@ public class Game {
 						);
 					}
 				);
-		sb.append("\nGame Live:");
-		sb.append(isLive());
 		return sb.toString();
 	}
 }

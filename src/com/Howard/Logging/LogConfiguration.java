@@ -31,10 +31,10 @@ public class LogConfiguration {
 		builder.add(appenderBuilder);
 
 		// create the new logger
-		builder.add(builder.newLogger("TestLogger", Level.DEBUG).add(builder.newAppenderRef("rolling"))
+		builder.add(builder.newLogger("TestLogger", Level.INFO).add(builder.newAppenderRef("rolling"))
 				.addAttribute("additivity", false));
 
-		builder.add(builder.newRootLogger(Level.DEBUG).add(builder.newAppenderRef("rolling")));
+		builder.add(builder.newRootLogger(Level.INFO).add(builder.newAppenderRef("rolling")));
 		LoggerContext ctx = Configurator.initialize(builder.build());
 	}
 }
